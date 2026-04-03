@@ -78,9 +78,15 @@ info-composer = Composer
 info-charter = Charter
 info-difficulty = Difficulty
 info-desc = Description
+info-collaborators = Collaborators
 info-rating = Rating
 info-type = Type
 info-tags = Tags
+
+collab-autocomplete-title = Complete Collaborators
+collab-autocomplete-content = Detected collaborator(s) missing user IDs: { $mentions }. Auto-complete?
+collab-autocomplete-failed = Failed to resolve "@{ $name }": user not found or ambiguous.
+collab-autocomplete-done = Collaborators completed.
 
 reviewed = Reviewed
 unreviewed = Unreviewed
