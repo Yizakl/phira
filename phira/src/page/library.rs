@@ -80,6 +80,12 @@ struct CreateFavorite {
     charts: Vec<ChartRef>,
 }
 
+struct ManageFavorite {
+    uuid: Uuid,
+    charts: Vec<ChartRef>,
+    add: bool,
+}
+
 type OnlineTaskResult = (Vec<ChartDisplayItem>, Vec<Chart>, u64);
 type OnlineTask = Task<Result<OnlineTaskResult>>;
 
@@ -135,6 +141,7 @@ pub struct LibraryPage {
     manage_fav_menu_options: Vec<(Uuid, bool)>,
     need_show_manage_fav_menu: bool,
     manage_fav_task: Option<Task<Result<(Collection, bool)>>>,
+    manage_fav_pre_task: Option<Task<Result<ManageFavorite>>>,
 
     multi_select_btn: DRectButton,
     multi_select_menu: Popup,
@@ -217,6 +224,7 @@ impl LibraryPage {
             manage_fav_menu_options: Vec::new(),
             need_show_manage_fav_menu: false,
             manage_fav_task: None,
+            manage_fav_pre_task: None,
 
             multi_select_btn: DRectButton::new(),
             multi_select_menu: Popup::new()
@@ -660,7 +668,12 @@ impl Page for LibraryPage {
 
     fn touch(&mut self, touch: &Touch, s: &mut SharedState) -> Result<bool> {
         let t = s.t;
-        if self.sync_fav_task.is_some() || self.export_task.is_some() || self.multi_create_fav_task.is_some() || self.manage_fav_task.is_some() {
+        if self.sync_fav_task.is_some()
+            || self.export_task.is_some()
+            || self.multi_create_fav_task.is_some()
+            || self.manage_fav_pre_task.is_some()
+            || self.manage_fav_task.is_some()
+        {
             return Ok(true);
         }
         let choose_cover = CHOOSE_COVER.load(Ordering::Relaxed);
@@ -1079,34 +1092,35 @@ impl Page for LibraryPage {
         if self.manage_fav_menu.changed() {
             let (uuid, all_in_fav) = self.manage_fav_menu_options[self.manage_fav_menu.selected()];
             self.manage_fav_menu.set_selected(usize::MAX);
-            let data = get_data();
-            let col = data.collection_info(&uuid).as_ref().clone();
-            match col.update(uuid, self.tabs.selected().view.multi_select.as_deref().unwrap(), !all_in_fav) {
-                CollectionUpdate::Unchanged => {}
-                CollectionUpdate::Updated { sync_task, add } => {
-                    if let Some(task) = sync_task {
-                        self.manage_fav_task = Some(task);
-                    } else if add {
-                        show_message(tl!("multi-added-to-fav")).duration(1.).ok();
-                    } else {
-                        show_message(tl!("multi-removed-from-fav")).duration(1.).ok();
+            let add = !all_in_fav;
+            let mut charts = self.tabs.selected().view.multi_select.as_ref().unwrap().clone();
+            self.manage_fav_pre_task = Some(Task::new(async move {
+                if add {
+                    let mut ids_str = String::new();
+                    for chart in &charts {
+                        if let Some(id) = chart.id() {
+                            ids_str.push_str(&id.to_string());
+                            ids_str.push(',');
+                        }
+                    }
+                    if !ids_str.is_empty() {
+                        ids_str.pop();
+                        let resp: Vec<Chart> = recv_raw(Client::get(format!("/chart/multi-get?ids={ids_str}"))).await?.json().await?;
+                        let mut id_to_chart = HashMap::new();
+                        for chart in resp {
+                            id_to_chart.insert(chart.id, chart);
+                        }
+                        for chart in &mut charts {
+                            if let Some(id) = chart.id() {
+                                if let Some(info) = id_to_chart.get(&id) {
+                                    chart.info = Some(Box::new(ChartRefChartInfo::from_chart(info)));
+                                }
+                            }
+                        }
                     }
                 }
-            }
-
-            let _ = save_data();
-
-            if self.current_fav_index.is_some_and(|it| data.collection_uuids()[it] == uuid) {
-                // Move out of current fav, dismiss menu and update list
-                self.manage_fav_menu.dismiss(s.t);
-                self.multi_operation_menu.dismiss(s.t);
-                self.tabs.selected_mut().view.multi_select = None;
-                self.sync_local(s);
-            } else {
-                // Otherwise, just update options
-                let options = self.get_move_fav_menu_options().unwrap();
-                self.manage_fav_menu.set_options(options);
-            }
+                Ok(ManageFavorite { uuid, charts, add })
+            }));
         }
         if JUST_LOADED_TOS.fetch_and(false, Ordering::Relaxed) {
             check_read_tos_and_policy(false, false);
@@ -1242,6 +1256,40 @@ impl Page for LibraryPage {
                     show_error(Error::msg("Export thread panicked"));
                     self.export_task = None;
                 }
+            }
+        }
+        if let Some(task) = &mut self.manage_fav_pre_task {
+            if let Some(res) = task.take() {
+                match res {
+                    Err(err) => show_error(err),
+                    Ok(ManageFavorite { uuid, charts, add }) => {
+                        let data = get_data();
+                        let col = data.collection_info(&uuid).as_ref().clone();
+                        match col.update(uuid, &charts, add) {
+                            CollectionUpdate::Unchanged => {}
+                            CollectionUpdate::Updated { sync_task, add } => {
+                                if let Some(task) = sync_task {
+                                    self.manage_fav_task = Some(task);
+                                } else if add {
+                                    show_message(tl!("multi-added-to-fav")).duration(1.).ok();
+                                } else {
+                                    show_message(tl!("multi-removed-from-fav")).duration(1.).ok();
+                                }
+                            }
+                        }
+                        let _ = save_data();
+                        if self.current_fav_index.is_some_and(|it| data.collection_uuids()[it] == uuid) {
+                            self.manage_fav_menu.dismiss(s.t);
+                            self.multi_operation_menu.dismiss(s.t);
+                            self.tabs.selected_mut().view.multi_select = None;
+                            self.sync_local(s);
+                        } else {
+                            let options = self.get_move_fav_menu_options().unwrap();
+                            self.manage_fav_menu.set_options(options);
+                        }
+                    }
+                }
+                self.manage_fav_pre_task = None;
             }
         }
         if let Some(task) = &mut self.manage_fav_task {
@@ -1493,7 +1541,7 @@ impl Page for LibraryPage {
             let total = self.export_total;
             ui.full_loading(tl!("multi-exporting", "current" => current, "total" => total), t);
         }
-        if self.multi_create_fav_task.is_some() || self.manage_fav_task.is_some() {
+        if self.multi_create_fav_task.is_some() || self.manage_fav_pre_task.is_some() || self.manage_fav_task.is_some() {
             ui.full_loading_simple(t);
         }
         Ok(())
