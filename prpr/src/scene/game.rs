@@ -725,6 +725,10 @@ impl GameScene {
                         if *ctrl == 0 {
                             tm.seek_to(p as f64);
                             self.music.seek_to(p)?;
+                            self.bad_notes.clear();
+                            self.judge.reset();
+                            self.chart.reset();
+                            self.res.judge_line_color = self.res.res_pack.info.color_perfect();
                         } else {
                             *(if *ctrl == -1 {
                                 &mut self.exercise_range.start
