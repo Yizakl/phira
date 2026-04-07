@@ -3,10 +3,10 @@ prpr_l10n::tl_file!("library");
 use super::{CollectionPage, FavoritesPage, NextPage, Page, SharedState};
 use crate::{
     charts_view::{ChartDisplayItem, ChartsView, NEED_UPDATE},
-    client::{recv_raw, Chart, ChartRef, Client, Collection, CollectionUpdate, LocalCollection},
+    client::{recv_raw, Chart, ChartRef, ChartRefChartInfo, Client, Collection, CollectionUpdate, LocalCollection},
     dir, get_data, get_data_mut,
     icons::Icons,
-    page::{favorites::FAV_PAGE_RESULT, ChartItem},
+    page::{favorites::FAV_PAGE_RESULT, ChartItem, ChartType, Illustration},
     popup::Popup,
     rate::RateDialog,
     save_data,
@@ -361,10 +361,20 @@ impl LibraryPage {
                     } else if let Some(chart) = it.info.as_ref() {
                         search_by_id
                             .map_or_else(
-                                || chart.name.to_ascii_lowercase().contains(&self.search_str.to_ascii_lowercase()),
-                                |search_id| chart.id == search_id,
+                                || chart.info.name.to_ascii_lowercase().contains(&self.search_str.to_ascii_lowercase()),
+                                |search_id| chart.info.id == Some(search_id),
                             )
-                            .then(|| ChartDisplayItem::from_remote(chart.as_ref()))
+                            .then(|| {
+                                ChartDisplayItem::new(
+                                    Some(ChartItem {
+                                        info: chart.info.clone(),
+                                        illu: Illustration::from_file_thumbnail(chart.illustration.clone()),
+                                        local_path: None,
+                                        chart_type: ChartType::Downloaded,
+                                    }),
+                                    None,
+                                )
+                            })
                     } else if let Some(local_path) = it.find_local_path().unwrap() {
                         let item = local_chart_map.get(&*local_path).unwrap();
                         local_matcher(item).then(|| ChartDisplayItem::new(Some((*item).clone()), None))
@@ -915,7 +925,7 @@ impl Page for LibraryPage {
                                 }
                                 for chart in &mut selected {
                                     if let Some(id) = chart.id() {
-                                        chart.info = Some(id_to_chart.get(&id).cloned().unwrap());
+                                        chart.info = Some(Box::new(ChartRefChartInfo::from_chart(id_to_chart.get(&id).unwrap())));
                                     }
                                 }
                             }
@@ -1005,13 +1015,13 @@ impl Page for LibraryPage {
                             Some(path) => paths.push(path.into_owned()),
                             None => {
                                 let mut charts = charts_view.charts.as_ref().unwrap().iter().filter_map(|it| it.chart.as_ref());
-                                non_existent.push(charts.find(|it| &it.to_ref() == chart).unwrap().info.name.clone());
+                                non_existent.push(charts.find(|it| &it.to_bare_ref() == chart).unwrap().info.name.clone());
                             }
                         }
                         let path: PathBuf = format!("{charts}/{}", chart.path).into();
                         if !path.exists() {
                             let mut charts = charts_view.charts.as_ref().unwrap().iter().filter_map(|it| it.chart.as_ref());
-                            non_existent.push(charts.find(|it| &it.to_ref() == chart).unwrap().info.name.clone());
+                            non_existent.push(charts.find(|it| &it.to_bare_ref() == chart).unwrap().info.name.clone());
                         } else {
                             paths.push(chart.path.clone());
                         }
@@ -1050,13 +1060,13 @@ impl Page for LibraryPage {
             match self.multi_select_menu.selected() {
                 0 => {
                     sel.clear();
-                    sel.extend(charts.iter().filter_map(|it| it.chart.as_ref()).map(ChartItem::to_ref));
+                    sel.extend(charts.iter().filter_map(|it| it.chart.as_ref()).map(ChartItem::to_bare_ref));
                 }
                 1 => {
                     let old_sel = mem::take(sel).into_iter().collect::<HashSet<_>>();
                     for chart in charts {
                         if let Some(chart) = &chart.chart {
-                            let r = chart.to_ref();
+                            let r = chart.to_bare_ref();
                             if !old_sel.contains(&r) {
                                 sel.push(r);
                             }

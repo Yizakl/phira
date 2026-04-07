@@ -8,7 +8,8 @@ use super::{
 use crate::{
     charts_view::NEED_UPDATE,
     client::{
-        basic_client_builder, recv_raw, Chart, ChartRef, Client, Collection, CollectionUpdate, Permissions, Ptr, Record, UserManager, CLIENT_TOKEN,
+        basic_client_builder, recv_raw, Chart, ChartRef, ChartRefChartInfo, Client, Collection, CollectionUpdate, Permissions, Ptr, Record,
+        UserManager, CLIENT_TOKEN,
     },
     data::{BriefChartInfo, LocalChart},
     dir, get_data, get_data_mut,
@@ -1384,7 +1385,7 @@ impl SongScene {
                 show_message(tl!("still-loading")).error();
                 return;
             };
-            chart_ref.info = Some(Box::new(entity));
+            chart_ref.info = Some(Box::new(ChartRefChartInfo::from_chart(&entity)));
         }
         let add = col.charts.iter().all(|it| it != &chart_ref);
         match col.update(uuid, &[chart_ref], add) {

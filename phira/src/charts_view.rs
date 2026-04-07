@@ -235,7 +235,7 @@ impl ChartsView {
                         }
                         if let Some(sel) = &mut self.multi_select {
                             button_hit();
-                            let r = chart.to_ref();
+                            let r = chart.to_bare_ref();
                             let mut removed = false;
                             sel.retain(|it| {
                                 if it == &r {
@@ -354,7 +354,7 @@ impl ChartsView {
             match self.chart_menu.selected() {
                 0 => {
                     let chart = self.charts.as_ref().unwrap()[editing].chart.as_ref().unwrap();
-                    self.multi_select = Some([chart.to_ref()].into());
+                    self.multi_select = Some([chart.to_bare_ref()].into());
                 }
                 1 => {
                     self.movement = Some((editing - has_header as usize, 0));
@@ -473,7 +473,7 @@ impl ChartsView {
 
                                 if let Some(chart) = &mut item.chart {
                                     let selected = self.multi_select.as_ref().and_then(|set| {
-                                        let chart_ref = chart.to_ref();
+                                        let chart_ref = chart.to_bare_ref();
                                         set.iter().position(|it| it == &chart_ref)
                                     });
                                     if selected.is_some() {
