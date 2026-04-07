@@ -804,7 +804,7 @@ impl SongScene {
         #[cfg(closed)]
         let rated = {
             let config = &get_data().config;
-            !config.offline_mode && can_rated && !mods.intersects(Mods::UNRATED) && config.speed >= 1.0 - 1e-3
+            !config.offline_mode && can_rated && !mods.intersects(Mods::UNRATED) && !config.use_keyboard && config.speed >= 1.0 - 1e-3
         };
         #[cfg(not(closed))]
         let rated = false;
