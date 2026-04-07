@@ -36,7 +36,7 @@ use std::{
     io::{self, BufWriter, Cursor, Write},
     mem,
     ops::Deref,
-    path::{Path, PathBuf},
+    path::Path,
     sync::{
         atomic::{AtomicBool, AtomicU32, Ordering},
         mpsc, Arc, Mutex,
@@ -1069,7 +1069,6 @@ impl Page for LibraryPage {
             match self.multi_operation_options[self.multi_operation_menu.selected()] {
                 "multi-export" => {
                     self.multi_operation_menu.dismiss(t);
-                    let charts = dir::charts()?;
                     let mut paths = Vec::with_capacity(selected.len());
                     let mut non_existent = Vec::new();
                     for chart in selected {
@@ -1079,13 +1078,6 @@ impl Page for LibraryPage {
                                 let mut charts = charts_view.charts.as_ref().unwrap().iter().filter_map(|it| it.chart.as_ref());
                                 non_existent.push(charts.find(|it| &it.to_bare_ref() == chart).unwrap().info.name.clone());
                             }
-                        }
-                        let path: PathBuf = format!("{charts}/{}", chart.path).into();
-                        if !path.exists() {
-                            let mut charts = charts_view.charts.as_ref().unwrap().iter().filter_map(|it| it.chart.as_ref());
-                            non_existent.push(charts.find(|it| &it.to_bare_ref() == chart).unwrap().info.name.clone());
-                        } else {
-                            paths.push(chart.path.clone());
                         }
                     }
                     if !non_existent.is_empty() {
