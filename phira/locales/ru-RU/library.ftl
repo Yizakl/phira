@@ -13,6 +13,5 @@ order-by = Сортировка по: { $order }
 order-asc = По возрастанию
 order-desc = По убыванию
 multi-select-status = Выбрано: { $count }
-multi-exported = Экспортировано
 multi-select-all = Выбрать все
 multi-select-invert = Обратить выделение
